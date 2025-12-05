@@ -1,0 +1,146 @@
+import React, { useState } from 'react';
+import { Send, Sparkles, Loader2 } from 'lucide-react';
+import { analyzeMealDescription } from '../services/geminiService';
+import { Meal, MealAnalysis } from '../types';
+import { v4 as uuidv4 } from 'uuid';
+import { NutritionCard } from './NutritionCard';
+import { MOCK_LOADING_PHRASES } from '../constants';
+
+interface AddMealViewProps {
+  onSave: (meal: Meal) => void;
+  onCancel: () => void;
+}
+
+export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) => {
+  const [input, setInput] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<MealAnalysis | null>(null);
+  const [loadingText, setLoadingText] = useState(MOCK_LOADING_PHRASES[0]);
+
+  const handleAnalyze = async () => {
+    if (!input.trim()) return;
+    
+    setIsAnalyzing(true);
+    setResult(null);
+    
+    // Cycle loading text
+    const textInterval = setInterval(() => {
+        setLoadingText(MOCK_LOADING_PHRASES[Math.floor(Math.random() * MOCK_LOADING_PHRASES.length)]);
+    }, 1500);
+
+    try {
+      const analysis = await analyzeMealDescription(input);
+      setResult(analysis);
+    } catch (error) {
+      alert("Something went wrong analyzing the meal. Please try again.");
+    } finally {
+      clearInterval(textInterval);
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!result) return;
+    
+    const newMeal: Meal = {
+      id: uuidv4(),
+      timestamp: Date.now(),
+      originalText: input,
+      analysis: result
+    };
+    
+    onSave(newMeal);
+    setInput('');
+    setResult(null);
+  };
+
+  return (
+    <div className="flex flex-col h-full pb-20">
+      <div className="flex-1 space-y-6">
+        <h2 className="text-2xl font-bold text-gray-900 px-1">Log Meal</h2>
+        
+        <div className="relative">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="e.g. 800kcal of christmas turkey dinner..."
+            className="w-full h-32 p-4 bg-white rounded-xl shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-lg placeholder:text-gray-400"
+            disabled={isAnalyzing || !!result}
+          />
+          {!result && (
+            <div className="absolute bottom-3 right-3 text-xs text-gray-400">
+              Powered by Gemini
+            </div>
+          )}
+        </div>
+
+        {isAnalyzing && (
+          <div className="flex flex-col items-center justify-center py-10 space-y-4 animate-pulse">
+            <Loader2 className="animate-spin text-blue-600" size={32} />
+            <p className="text-sm text-gray-500 font-medium">{loadingText}</p>
+          </div>
+        )}
+
+        {result && (
+          <div className="animate-fade-in-up">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="font-bold text-gray-700">Analysis Result</h3>
+              <button 
+                onClick={() => setResult(null)} 
+                className="text-sm text-blue-600 font-medium"
+              >
+                Edit
+              </button>
+            </div>
+            
+            <NutritionCard data={result} title={result.summary} />
+            
+            <div className="mt-4 px-1">
+              <p className="text-xs text-gray-500 font-bold uppercase mb-2">Detected Items</p>
+              <div className="flex flex-wrap gap-2">
+                {result.foodItems.map((item, idx) => (
+                  <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-md">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="sticky bottom-20 pt-4 bg-gradient-to-t from-[#f3f4f6] via-[#f3f4f6] to-transparent">
+        {!result ? (
+          <button
+            onClick={handleAnalyze}
+            disabled={!input.trim() || isAnalyzing}
+            className={`w-full py-4 rounded-xl flex items-center justify-center space-x-2 font-bold text-lg shadow-lg transition-all transform active:scale-[0.98] ${
+              !input.trim() || isAnalyzing
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-black text-white hover:bg-gray-800'
+            }`}
+          >
+            <Sparkles size={20} />
+            <span>Analyze</span>
+          </button>
+        ) : (
+          <div className="flex gap-3">
+             <button
+              onClick={() => setResult(null)}
+              className="flex-1 py-4 rounded-xl font-bold text-lg bg-white text-gray-800 border border-gray-200 shadow-sm active:scale-[0.98] transition-transform"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              className="flex-[2] py-4 rounded-xl flex items-center justify-center space-x-2 font-bold text-lg bg-blue-600 text-white shadow-lg active:scale-[0.98] transition-transform"
+            >
+              <span>Save Log</span>
+              <Send size={20} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

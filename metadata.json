@@ -1,0 +1,5 @@
+{
+  "name": "Pixel Nutrition AI",
+  "description": "A mobile-first nutrition tracker that uses AI to estimate macros from natural language meal descriptions.",
+  "requestFramePermissions": []
+}
