@@ -132,21 +132,44 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f4f6] text-gray-900 font-sans">
-      <div className="max-w-md mx-auto h-screen flex flex-col relative bg-white sm:shadow-xl sm:my-8 sm:h-[800px] sm:rounded-[3rem] sm:border-8 sm:border-gray-900 overflow-hidden">
-        
-        {/* Mobile Header */}
-        <header className="px-6 pt-12 pb-4 bg-white z-10 sticky top-0">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+    <div className="min-h-screen bg-[#f3f4f6] text-gray-900 font-sans flex flex-col">
+        {/* Top Header - Sticky on all screens */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            {/* Brand */}
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView(ViewState.DASHBOARD)}>
               <span className={`w-2 h-6 rounded-full ${isCloudConfigured && currentUser ? 'bg-blue-600' : 'bg-gray-400'}`}></span>
-              Pixel Nutrition
-            </h1>
-            <div className="flex items-center space-x-2">
+              <h1 className="text-xl font-extrabold tracking-tight">Pixel Nutrition</h1>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-8">
+                <button 
+                  onClick={() => setView(ViewState.DASHBOARD)} 
+                  className={`text-sm font-bold transition-colors ${view === ViewState.DASHBOARD ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Dashboard
+                </button>
+                <button 
+                  onClick={() => setView(ViewState.ADD)} 
+                  className={`text-sm font-bold transition-colors ${view === ViewState.ADD ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Log Meal
+                </button>
+                <button 
+                  onClick={() => setView(ViewState.HISTORY)} 
+                  className={`text-sm font-bold transition-colors ${view === ViewState.HISTORY ? 'text-blue-600' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  History
+                </button>
+             </div>
+
+            {/* Right Side User/Settings */}
+            <div className="flex items-center space-x-3">
                 {isCloudConfigured && currentUser && (
                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden border border-blue-200">
                       {currentUser.photoURL ? (
-                          <img src={currentUser.photoURL} className="w-full h-full object-cover" />
+                          <img src={currentUser.photoURL} alt="User" className="w-full h-full object-cover" />
                       ) : (
                           <UserIcon size={16} className="text-blue-600" />
                       )}
@@ -164,13 +187,13 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar">
+        {/* Main Content Area */}
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {renderView()}
         </main>
 
-        {/* Bottom Navigation */}
-        <nav className="bg-white border-t border-gray-100 px-6 py-4 pb-8 sticky bottom-0 z-20">
+        {/* Mobile Bottom Navigation (Hidden on Desktop) */}
+        <nav className="md:hidden bg-white border-t border-gray-100 px-6 py-4 pb-8 sticky bottom-0 z-20">
           <div className="flex justify-around items-center">
             <button
               onClick={() => setView(ViewState.DASHBOARD)}
@@ -205,15 +228,16 @@ const App: React.FC = () => {
             </button>
           </div>
         </nav>
-
-      </div>
       
-       <div className="hidden sm:block fixed bottom-4 right-4 text-gray-400 text-xs">
+       {/* Desktop Footer Status */}
+       <div className="hidden md:block py-6 text-center text-gray-400 text-xs border-t border-gray-200 mt-auto bg-gray-50">
+         <p>
          {isCloudConfigured 
             ? currentUser 
-                ? `Syncing as ${currentUser.email}`
+                ? `Cloud Sync Active • Signed in as ${currentUser.email}`
                 : 'Cloud Configured (Not Signed In)'
-            : 'Local Storage Mode'}
+            : 'Local Storage Mode • Data saved to browser'}
+         </p>
       </div>
     </div>
   );

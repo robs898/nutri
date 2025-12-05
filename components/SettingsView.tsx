@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Meal } from '../types';
-import { Download, Upload, Database, AlertTriangle, Cloud, Check, Wifi, LogOut, LogIn } from 'lucide-react';
+import { Download, Upload, Database, AlertTriangle, Cloud, Check, Wifi, LogOut, LogIn, Copy } from 'lucide-react';
 import { signInWithGoogle, signOut, isFirebaseInitialized, initFirebase } from '../services/firebaseService';
 import { User } from 'firebase/auth';
 
@@ -16,6 +16,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
   const [configJson, setConfigJson] = useState('');
   const [isCloudConfigured, setIsCloudConfigured] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [signInError, setSignInError] = useState<React.ReactNode | null>(null);
 
   useEffect(() => {
     const checkConfig = () => {
@@ -145,11 +146,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
       setIsCloudConfigured(false);
       setConfigJson('');
       setConfigError(null);
+      setSignInError(null);
       window.location.reload();
     }
   };
   
   const handleSignIn = async () => {
+      setSignInError(null);
       try {
           if (!isFirebaseInitialized()) {
              // Safety check: try to init from local storage just in case
@@ -160,7 +163,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
           }
           await signInWithGoogle();
       } catch (e: any) {
-          alert(`Sign in failed: ${e.message}`);
+          console.error(e);
+          if (e.code === 'auth/unauthorized-domain' || (e.message && e.message.includes('auth/unauthorized-domain'))) {
+              const domain = window.location.hostname;
+              setSignInError(
+                  <div className="space-y-2">
+                      <p className="font-bold">Unauthorized Domain</p>
+                      <p>You must add this domain to your Firebase Console:</p>
+                      <div className="bg-white p-2 border rounded text-gray-800 font-mono break-all flex justify-between items-center">
+                          <span>{domain}</span>
+                          <button onClick={() => navigator.clipboard.writeText(domain)} className="p-1 hover:bg-gray-100 rounded">
+                              <Copy size={14}/>
+                          </button>
+                      </div>
+                      <p>Go to <b>Authentication &gt; Settings &gt; Authorized Domains</b> and add it.</p>
+                  </div>
+              );
+          } else if (e.code === 'auth/popup-blocked') {
+              setSignInError("Popup blocked. Please allow popups for this site in your browser settings.");
+          } else {
+              setSignInError(`Sign in failed: ${e.message}`);
+          }
       }
   };
 
@@ -206,7 +229,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
   };
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 md:pb-0">
       <h2 className="text-2xl font-bold text-gray-900 px-1">Settings</h2>
 
       {/* Cloud Sync Section */}
@@ -261,6 +284,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
              {!currentUser ? (
                 <div className="bg-white p-4 rounded-lg border border-blue-100">
                    <p className="text-sm text-gray-600 mb-3">Sign in to sync your data across devices.</p>
+                   {signInError && (
+                       <div className="mb-3 p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-100">
+                           {signInError}
+                       </div>
+                   )}
                    <button onClick={handleSignIn} className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center justify-center space-x-2 shadow-sm">
                       <LogIn size={16} />
                       <span>Sign in with Google</span>

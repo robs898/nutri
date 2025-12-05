@@ -48,7 +48,7 @@ export const NutritionCard: React.FC<NutritionCardProps> = ({ data, title, compa
          </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="flex flex-col">
           <div className="flex justify-between text-sm mb-1">
             <span className="text-gray-600">Protein</span>

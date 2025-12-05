@@ -30,16 +30,16 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ meals, onDelete }) => 
   });
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 md:pb-0">
       <h2 className="text-2xl font-bold text-gray-900 px-1">History</h2>
       {Object.entries(groupedMeals).map(([dateKey, daysMeals]) => (
         <div key={dateKey}>
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">
             {format(new Date(dateKey), 'EEE, MMM d')}
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-3 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-4">
             {daysMeals.map((meal) => (
-              <div key={meal.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative group">
+              <div key={meal.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative group transition-all hover:shadow-md">
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <h4 className="font-bold text-gray-900">{meal.analysis.summary}</h4>

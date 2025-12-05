@@ -80,7 +80,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ meals }) => {
   }, [filteredMeals, range]);
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-6 pb-24 md:pb-0">
       <div className="flex items-center justify-between px-1">
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
         <div className="bg-white rounded-lg p-1 flex shadow-sm border border-gray-100">

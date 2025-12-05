@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Sparkles, Loader2 } from 'lucide-react';
+import { Send, Sparkles, Loader2, CalendarClock } from 'lucide-react';
 import { analyzeMealDescription } from '../services/geminiService';
 import { Meal, MealAnalysis } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -16,6 +16,12 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<MealAnalysis | null>(null);
   const [loadingText, setLoadingText] = useState(MOCK_LOADING_PHRASES[0]);
+  
+  // Initialize with local ISO string for datetime-local input
+  const [mealDate, setMealDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+  });
 
   const handleAnalyze = async () => {
     if (!input.trim()) return;
@@ -42,9 +48,11 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
   const handleConfirm = () => {
     if (!result) return;
     
+    const timestamp = new Date(mealDate).getTime();
+    
     const newMeal: Meal = {
       id: uuidv4(),
-      timestamp: Date.now(),
+      timestamp: timestamp,
       originalText: input,
       analysis: result
     };
@@ -52,10 +60,13 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
     onSave(newMeal);
     setInput('');
     setResult(null);
+    // Reset date to current time for next log
+    const now = new Date();
+    setMealDate(new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16));
   };
 
   return (
-    <div className="flex flex-col h-full pb-20">
+    <div className="flex flex-col h-full pb-20 md:pb-0">
       <div className="flex-1 space-y-6">
         <h2 className="text-2xl font-bold text-gray-900 px-1">Log Meal</h2>
         
@@ -64,7 +75,7 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="e.g. 800kcal of christmas turkey dinner..."
-            className="w-full h-32 p-4 bg-white rounded-xl shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-lg placeholder:text-gray-400"
+            className="w-full h-32 md:h-64 p-4 bg-white rounded-xl shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-lg placeholder:text-gray-400 transition-all"
             disabled={isAnalyzing || !!result}
           />
           {!result && (
@@ -82,34 +93,49 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
         )}
 
         {result && (
-          <div className="animate-fade-in-up">
-            <div className="flex items-center justify-between mb-3 px-1">
+          <div className="animate-fade-in-up space-y-4">
+            <div className="flex items-center justify-between px-1">
               <h3 className="font-bold text-gray-700">Analysis Result</h3>
               <button 
                 onClick={() => setResult(null)} 
-                className="text-sm text-blue-600 font-medium"
+                className="text-sm text-blue-600 font-medium hover:underline"
               >
-                Edit
+                Edit Input
               </button>
             </div>
             
             <NutritionCard data={result} title={result.summary} />
             
-            <div className="mt-4 px-1">
-              <p className="text-xs text-gray-500 font-bold uppercase mb-2">Detected Items</p>
-              <div className="flex flex-wrap gap-2">
-                {result.foodItems.map((item, idx) => (
-                  <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-md">
-                    {item}
-                  </span>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-1">
+                <div>
+                    <label className="block text-xs text-gray-500 font-bold uppercase mb-2 flex items-center gap-1">
+                        <CalendarClock size={14} />
+                        <span>Date & Time</span>
+                    </label>
+                    <input 
+                        type="datetime-local"
+                        value={mealDate}
+                        onChange={(e) => setMealDate(e.target.value)}
+                        className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 font-medium focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
+                    />
+                </div>
+
+                <div>
+                    <p className="text-xs text-gray-500 font-bold uppercase mb-2">Detected Items</p>
+                    <div className="flex flex-wrap gap-2">
+                        {result.foodItems.map((item, idx) => (
+                        <span key={idx} className="bg-gray-200 text-gray-700 text-xs px-2 py-1 rounded-md">
+                            {item}
+                        </span>
+                        ))}
+                    </div>
+                </div>
             </div>
           </div>
         )}
       </div>
 
-      <div className="sticky bottom-20 pt-4 bg-gradient-to-t from-[#f3f4f6] via-[#f3f4f6] to-transparent">
+      <div className="sticky bottom-20 md:static md:mt-6 pt-4 bg-gradient-to-t from-[#f3f4f6] via-[#f3f4f6] to-transparent md:bg-none">
         {!result ? (
           <button
             onClick={handleAnalyze}
@@ -127,13 +153,13 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel }) =>
           <div className="flex gap-3">
              <button
               onClick={() => setResult(null)}
-              className="flex-1 py-4 rounded-xl font-bold text-lg bg-white text-gray-800 border border-gray-200 shadow-sm active:scale-[0.98] transition-transform"
+              className="flex-1 py-4 rounded-xl font-bold text-lg bg-white text-gray-800 border border-gray-200 shadow-sm active:scale-[0.98] transition-transform hover:bg-gray-50"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirm}
-              className="flex-[2] py-4 rounded-xl flex items-center justify-center space-x-2 font-bold text-lg bg-blue-600 text-white shadow-lg active:scale-[0.98] transition-transform"
+              className="flex-[2] py-4 rounded-xl flex items-center justify-center space-x-2 font-bold text-lg bg-blue-600 text-white shadow-lg active:scale-[0.98] transition-transform hover:bg-blue-700"
             >
               <span>Save Log</span>
               <Send size={20} />
