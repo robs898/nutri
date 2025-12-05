@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, PlusCircle, History, Settings } from 'lucide-react';
-import { ViewState, Meal } from './types';
+import { LayoutDashboard, PlusCircle, History, Settings, Cloud, User as UserIcon } from 'lucide-react';
+import { ViewState, Meal, FirebaseConfig } from './types';
 import { getStoredMeals, saveMeal, deleteMeal, APP_STORAGE_KEY } from './services/storageService';
+import { initFirebase, fetchMealsFromCloud, saveMealToCloud, deleteMealFromCloud, subscribeToAuthChanges } from './services/firebaseService';
+import { User } from 'firebase/auth';
 import { DashboardView } from './components/DashboardView';
 import { AddMealView } from './components/AddMealView';
 import { HistoryView } from './components/HistoryView';
@@ -10,43 +12,111 @@ import { SettingsView } from './components/SettingsView';
 const App: React.FC = () => {
   const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [isCloudConfigured, setIsCloudConfigured] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setMeals(getStoredMeals());
+    let unsubscribeAuth: () => void;
+
+    const initializeData = async () => {
+        setIsLoading(true);
+        const cloudConfigStr = localStorage.getItem('pixel-nutrition-firebase-config');
+        
+        if (cloudConfigStr) {
+            try {
+                const config = JSON.parse(cloudConfigStr) as FirebaseConfig;
+                const success = initFirebase(config);
+                if (success) {
+                    setIsCloudConfigured(true);
+                    
+                    // Listen for auth changes
+                    unsubscribeAuth = subscribeToAuthChanges(async (user) => {
+                        setCurrentUser(user);
+                        if (user) {
+                            try {
+                                const cloudMeals = await fetchMealsFromCloud();
+                                setMeals(cloudMeals);
+                            } catch (e) {
+                                console.error("Error fetching cloud meals", e);
+                            }
+                        } else {
+                            // If logged out but config exists, show local or empty? 
+                            // Let's show local fallback or empty.
+                            setMeals(getStoredMeals());
+                        }
+                        setIsLoading(false);
+                    })!; // Bang operator since we know init returned true
+                    return;
+                }
+            } catch (e) {
+                console.error("Invalid cloud config", e);
+            }
+        }
+        
+        // Default to local storage if no cloud config
+        setMeals(getStoredMeals());
+        setIsLoading(false);
+    };
+
+    initializeData();
+
+    return () => {
+        if (unsubscribeAuth) unsubscribeAuth();
+    };
   }, []);
 
-  const handleSaveMeal = (meal: Meal) => {
-    const updated = saveMeal(meal);
-    setMeals(updated);
+  const handleSaveMeal = async (meal: Meal) => {
+    if (isCloudConfigured && currentUser) {
+        saveMealToCloud(meal).catch(err => alert("Failed to save to cloud: " + err.message));
+        setMeals(prev => [meal, ...prev]);
+    } else {
+        const updated = saveMeal(meal);
+        setMeals(updated);
+    }
     setView(ViewState.DASHBOARD);
   };
 
-  const handleDeleteMeal = (id: string) => {
+  const handleDeleteMeal = async (id: string) => {
     if (confirm("Are you sure you want to delete this meal?")) {
-        const updated = deleteMeal(id);
-        setMeals(updated);
+        if (isCloudConfigured && currentUser) {
+            deleteMealFromCloud(id).catch(err => alert("Failed to delete from cloud"));
+            setMeals(prev => prev.filter(m => m.id !== id));
+        } else {
+            const updated = deleteMeal(id);
+            setMeals(updated);
+        }
     }
   };
 
-  const handleImportMeals = (importedMeals: Meal[]) => {
-    // Merge logic: Filter out duplicates based on ID, then combine
+  const handleImportMeals = async (importedMeals: Meal[]) => {
     const currentIds = new Set(meals.map(m => m.id));
     const newMeals = importedMeals.filter(m => !currentIds.has(m.id));
-    
     const combined = [...newMeals, ...meals].sort((a, b) => b.timestamp - a.timestamp);
     
-    // Save everything to storage
-    localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(combined));
-    setMeals(combined);
+    if (isCloudConfigured && currentUser) {
+        const uploadPromises = newMeals.map(m => saveMealToCloud(m));
+        await Promise.all(uploadPromises);
+        setMeals(combined);
+    } else {
+        localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(combined));
+        setMeals(combined);
+    }
   };
 
   const handleClearAll = () => {
-      localStorage.removeItem(APP_STORAGE_KEY);
-      setMeals([]);
+      if (!isCloudConfigured) {
+        localStorage.removeItem(APP_STORAGE_KEY);
+        setMeals([]);
+      }
       setView(ViewState.DASHBOARD);
   };
 
   const renderView = () => {
+    if (isLoading) {
+        return <div className="flex h-full items-center justify-center text-gray-400">Loading...</div>;
+    }
+
     switch (view) {
       case ViewState.DASHBOARD:
         return <DashboardView meals={meals} />;
@@ -55,7 +125,7 @@ const App: React.FC = () => {
       case ViewState.HISTORY:
         return <HistoryView meals={meals} onDelete={handleDeleteMeal} />;
       case ViewState.SETTINGS:
-        return <SettingsView meals={meals} onImport={handleImportMeals} onClear={handleClearAll} />;
+        return <SettingsView meals={meals} onImport={handleImportMeals} onClear={handleClearAll} currentUser={currentUser} />;
       default:
         return <DashboardView meals={meals} />;
     }
@@ -69,17 +139,28 @@ const App: React.FC = () => {
         <header className="px-6 pt-12 pb-4 bg-white z-10 sticky top-0">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
-              <span className="w-2 h-6 bg-blue-600 rounded-full"></span>
+              <span className={`w-2 h-6 rounded-full ${isCloudConfigured && currentUser ? 'bg-blue-600' : 'bg-gray-400'}`}></span>
               Pixel Nutrition
             </h1>
-            <button 
-              onClick={() => setView(ViewState.SETTINGS)}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                  view === ViewState.SETTINGS ? 'bg-gray-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-                <Settings size={20} />
-            </button>
+            <div className="flex items-center space-x-2">
+                {isCloudConfigured && currentUser && (
+                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden border border-blue-200">
+                      {currentUser.photoURL ? (
+                          <img src={currentUser.photoURL} className="w-full h-full object-cover" />
+                      ) : (
+                          <UserIcon size={16} className="text-blue-600" />
+                      )}
+                   </div>
+                )}
+                <button 
+                onClick={() => setView(ViewState.SETTINGS)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                    view === ViewState.SETTINGS ? 'bg-gray-100 text-blue-600' : 'text-gray-400 hover:text-gray-600'
+                }`}
+                >
+                    <Settings size={20} />
+                </button>
+            </div>
           </div>
         </header>
 
@@ -127,9 +208,12 @@ const App: React.FC = () => {
 
       </div>
       
-      {/* Desktop Background Helper */}
-      <div className="hidden sm:block fixed bottom-4 right-4 text-gray-400 text-xs">
-         Preview Mode
+       <div className="hidden sm:block fixed bottom-4 right-4 text-gray-400 text-xs">
+         {isCloudConfigured 
+            ? currentUser 
+                ? `Syncing as ${currentUser.email}`
+                : 'Cloud Configured (Not Signed In)'
+            : 'Local Storage Mode'}
       </div>
     </div>
   );
