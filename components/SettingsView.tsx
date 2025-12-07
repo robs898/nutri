@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Meal } from '../types';
-import { Download, Upload, Database, AlertTriangle, Cloud, Check, Wifi, LogOut, LogIn, Copy } from 'lucide-react';
+import { Download, Upload, Database, AlertTriangle, Cloud, Check, Wifi, LogOut, LogIn, Copy, Bot, ChevronDown } from 'lucide-react';
 import { signInWithGoogle, signOut, isFirebaseInitialized, initFirebase } from '../services/firebaseService';
 import { User } from 'firebase/auth';
 
@@ -11,12 +11,19 @@ interface SettingsViewProps {
   currentUser: User | null;
 }
 
+const AVAILABLE_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)', desc: 'Best balance of speed and intelligence.' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3.0 Pro', desc: 'Smarter reasoning, slightly slower.' },
+    { id: 'gemini-2.5-flash-lite-latest', name: 'Gemini 2.5 Flash Lite', desc: 'Fastest response time.' },
+];
+
 export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onClear, currentUser }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [configJson, setConfigJson] = useState('');
   const [isCloudConfigured, setIsCloudConfigured] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
   const [signInError, setSignInError] = useState<React.ReactNode | null>(null);
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
 
   useEffect(() => {
     const checkConfig = () => {
@@ -24,20 +31,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
         if (savedConfig) {
           setConfigJson(savedConfig);
           
-          // Check if Firebase is actually running. 
-          // App.tsx tries to init on load, but if it failed, we shouldn't show "Configured" state.
           if (isFirebaseInitialized()) {
              setIsCloudConfigured(true);
              setConfigError(null);
           } else {
-             // Try to initialize one last time here to be sure
              try {
                 const parsed = JSON.parse(savedConfig);
                 if (initFirebase(parsed)) {
                     setIsCloudConfigured(true);
                     setConfigError(null);
                 } else {
-                    // Config exists but failed to init
                     setIsCloudConfigured(false);
                     setConfigError("The saved configuration appears to be invalid. Please check it below.");
                 }
@@ -47,35 +50,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
              }
           }
         }
+        
+        const savedModel = localStorage.getItem('pixel-nutrition-model');
+        if (savedModel) setSelectedModel(savedModel);
     };
     
     checkConfig();
   }, []);
 
+  const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newModel = e.target.value;
+      setSelectedModel(newModel);
+      localStorage.setItem('pixel-nutrition-model', newModel);
+  };
+
   const extractConfigObject = (str: string): string | null => {
-    // 1. Try to find the specific variable definition first
     let startIndex = str.search(/firebaseConfig\s*=\s*\{/);
     
     if (startIndex !== -1) {
-       // Move index to the '{' character
        startIndex = str.indexOf('{', startIndex);
     } else {
-       // 2. If variable not found, look for the first '{' (fallback for direct object paste)
-       // But be careful: if the user pasted a full file with imports, the first '{' might be an import.
-       // Heuristic: check if "apiKey" is present. If so, find the '{' closest before "apiKey".
        const apiKeyIndex = str.indexOf('apiKey');
        if (apiKeyIndex !== -1) {
-           // search backwards from apiKey to find the opening brace
            startIndex = str.lastIndexOf('{', apiKeyIndex);
        } else {
-           // Last resort: just the first brace
            startIndex = str.indexOf('{');
        }
     }
 
     if (startIndex === -1) return null;
 
-    // Brace counting to find the matching closing brace
     let braceCount = 0;
     let foundStart = false;
     
@@ -99,8 +103,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
     setConfigError(null);
     try {
       const rawInput = configJson.trim();
-      
-      // If user pasted raw keys without braces (e.g. "apiKey: ..."), wrap them
       let processingInput = rawInput;
       if (rawInput.includes('apiKey') && !rawInput.includes('{')) {
           processingInput = `{${rawInput}}`;
@@ -112,7 +114,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
         throw new Error("Could not find a valid configuration object (starting with { and ending with }).");
       }
       
-      // Use Function constructor to parse the JS object safely.
       const parse = new Function(`return ${extractedObject}`);
       const parsed = parse();
 
@@ -120,12 +121,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
          throw new Error("Parsed result is not a valid object.");
       }
 
-      // Check for essential keys to confirm it's actually a firebase config
       if (!parsed.apiKey || !parsed.projectId) {
          throw new Error("Configuration is missing 'apiKey' or 'projectId'. Please check if you copied the correct code.");
       }
 
-      // Try to initialize immediately to verify
       if (!initFirebase(parsed)) {
           throw new Error("Firebase failed to initialize with these settings. Please check your project configuration.");
       }
@@ -155,7 +154,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
       setSignInError(null);
       try {
           if (!isFirebaseInitialized()) {
-             // Safety check: try to init from local storage just in case
              const saved = localStorage.getItem('pixel-nutrition-firebase-config');
              if (saved) {
                  initFirebase(JSON.parse(saved));
@@ -231,6 +229,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ meals, onImport, onC
   return (
     <div className="space-y-6 pb-24 md:pb-0">
       <h2 className="text-2xl font-bold text-gray-900 px-1">Settings</h2>
+
+      {/* Model Selection */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+         <div className="flex items-center space-x-3 mb-4">
+            <div className="bg-purple-100 p-2 rounded-full text-purple-600">
+                <Bot size={20} />
+            </div>
+            <div className="flex-1">
+                <h3 className="font-bold text-gray-800">AI Model</h3>
+                <p className="text-xs text-gray-500">Choose the brain behind the app.</p>
+            </div>
+         </div>
+         <div className="relative">
+             <select 
+                value={selectedModel}
+                onChange={handleModelChange}
+                className="w-full p-3 pl-4 pr-10 appearance-none bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+             >
+                 {AVAILABLE_MODELS.map(m => (
+                     <option key={m.id} value={m.id}>{m.name}</option>
+                 ))}
+             </select>
+             <ChevronDown size={16} className="absolute right-3 top-3.5 text-gray-500 pointer-events-none" />
+         </div>
+         <div className="mt-3 bg-gray-50 p-3 rounded-lg border border-gray-100">
+             <p className="text-xs text-gray-600">
+                 {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.desc}
+             </p>
+         </div>
+      </div>
 
       {/* Cloud Sync Section */}
       <div className={`p-6 rounded-xl shadow-sm border ${isCloudConfigured ? 'bg-blue-50 border-blue-100' : 'bg-white border-gray-100'}`}>

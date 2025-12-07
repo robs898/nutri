@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Send, Sparkles, Loader2, CalendarClock, Save } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Send, Sparkles, Loader2, CalendarClock, Save, Camera, X, ImageIcon } from 'lucide-react';
 import { analyzeMealDescription } from '../services/geminiService';
 import { Meal, MealAnalysis } from '../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -17,6 +17,8 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<MealAnalysis | null>(initialData?.analysis || null);
   const [loadingText, setLoadingText] = useState(MOCK_LOADING_PHRASES[0]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Initialize with local ISO string for datetime-local input
   const [mealDate, setMealDate] = useState(() => {
@@ -25,8 +27,24 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
     return new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
   });
 
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        // Strip prefix if needed for some APIs, but Gemini usually takes full data url or raw base64.
+        // The SDK helper handles standard base64 strings well, usually we strip the header for raw data.
+        // But for display we need the header.
+        // Let's store full data URL for display, and strip for API.
+        setSelectedImage(base64String);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAnalyze = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedImage) return;
     
     setIsAnalyzing(true);
     setResult(null);
@@ -37,9 +55,16 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
     }, 1500);
 
     try {
-      const analysis = await analyzeMealDescription(input);
+      // If we have an image, strip the data:image/jpeg;base64, prefix for the API
+      let rawBase64 = undefined;
+      if (selectedImage) {
+          rawBase64 = selectedImage.split(',')[1];
+      }
+
+      const analysis = await analyzeMealDescription(input, rawBase64);
       setResult(analysis);
     } catch (error) {
+      console.error(error);
       alert("Something went wrong analyzing the meal. Please try again.");
     } finally {
       clearInterval(textInterval);
@@ -55,7 +80,7 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
     const newMeal: Meal = {
       id: initialData?.id || uuidv4(), // Preserve ID if editing
       timestamp: timestamp,
-      originalText: input,
+      originalText: input || (selectedImage ? "📸 Image Log" : ""),
       analysis: result
     };
     
@@ -64,6 +89,7 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
     if (!initialData) {
         setInput('');
         setResult(null);
+        setSelectedImage(null);
         const now = new Date();
         setMealDate(new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 16));
     }
@@ -76,20 +102,60 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
       <div className="flex-1 space-y-6">
         <h2 className="text-2xl font-bold text-gray-900 px-1">{isEditing ? 'Edit Meal' : 'Log Meal'}</h2>
         
-        <div className="relative">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g. 800kcal of christmas turkey dinner..."
-            className="w-full h-32 md:h-64 p-4 bg-white rounded-xl shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-lg placeholder:text-gray-400 transition-all"
-            disabled={isAnalyzing || (!!result && !isEditing)} // Allow editing text even if result exists when in edit mode? Maybe user wants to refine. 
-            // Actually, for simplicity, let's allow editing text always until re-analyzed, but if result is present, maybe show "Edit Input" button logic like below.
-          />
-          {!result && (
-            <div className="absolute bottom-3 right-3 text-xs text-gray-400">
-              Powered by Gemini
+        {/* Input Area */}
+        <div className="space-y-4">
+             {/* Image Preview Area */}
+            {selectedImage && (
+                <div className="relative w-full h-48 bg-gray-100 rounded-xl overflow-hidden border border-gray-200">
+                    <img src={selectedImage} alt="Meal preview" className="w-full h-full object-cover" />
+                    <button 
+                        onClick={() => {
+                            setSelectedImage(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            )}
+
+            <div className="relative">
+            <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={selectedImage ? "Add any extra details (optional)..." : "e.g. 800kcal of christmas turkey dinner..."}
+                className="w-full h-32 md:h-48 p-4 bg-white rounded-xl shadow-sm border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-lg placeholder:text-gray-400 transition-all"
+                disabled={isAnalyzing || (!!result && !isEditing)}
+            />
+            
+            {/* Camera/Image Button (Only show if no result yet) */}
+            {!result && !isAnalyzing && (
+                <div className="absolute bottom-3 right-3 flex space-x-2">
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                        title="Add photo"
+                    >
+                        <Camera size={20} />
+                        <span className="text-xs font-bold hidden sm:inline">Add Photo</span>
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleImageSelect} 
+                        accept="image/*" 
+                        className="hidden" 
+                    />
+                </div>
+            )}
+            
+             {!result && (
+                <div className="absolute bottom-3 left-3 text-xs text-gray-400">
+                  Powered by Gemini
+                </div>
+              )}
             </div>
-          )}
         </div>
 
         {isAnalyzing && (
@@ -155,9 +221,9 @@ export const AddMealView: React.FC<AddMealViewProps> = ({ onSave, onCancel, init
              )}
             <button
                 onClick={handleAnalyze}
-                disabled={!input.trim() || isAnalyzing}
+                disabled={(!input.trim() && !selectedImage) || isAnalyzing}
                 className={`flex-[2] py-4 rounded-xl flex items-center justify-center space-x-2 font-bold text-lg shadow-lg transition-all transform active:scale-[0.98] ${
-                !input.trim() || isAnalyzing
+                (!input.trim() && !selectedImage) || isAnalyzing
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-black text-white hover:bg-gray-800'
                 }`}
