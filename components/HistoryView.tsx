@@ -1,15 +1,16 @@
 import React from 'react';
 import { Meal } from '../types';
 import { format } from 'date-fns';
-import { Trash2, Calendar } from 'lucide-react';
+import { Trash2, Calendar, Pencil } from 'lucide-react';
 import { NutritionCard } from './NutritionCard';
 
 interface HistoryViewProps {
   meals: Meal[];
   onDelete: (id: string) => void;
+  onEdit: (meal: Meal) => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ meals, onDelete }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ meals, onDelete, onEdit }) => {
   if (meals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-400">
@@ -41,16 +42,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ meals, onDelete }) => 
             {daysMeals.map((meal) => (
               <div key={meal.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative group transition-all hover:shadow-md">
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-bold text-gray-900">{meal.analysis.summary}</h4>
-                    <p className="text-xs text-gray-500 italic mt-0.5">"{meal.originalText}"</p>
+                  <div className="flex-1 pr-2">
+                    <h4 className="font-bold text-gray-900 line-clamp-1">{meal.analysis.summary}</h4>
+                    <p className="text-xs text-gray-500 italic mt-0.5 line-clamp-1">"{meal.originalText}"</p>
                   </div>
-                  <button 
-                    onClick={() => onDelete(meal.id)}
-                    className="text-gray-300 hover:text-red-500 transition-colors p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center space-x-1">
+                     <button 
+                        onClick={() => onEdit(meal)}
+                        className="text-gray-300 hover:text-blue-600 transition-colors p-1.5 rounded-full hover:bg-blue-50"
+                        title="Edit"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button 
+                        onClick={() => onDelete(meal.id)}
+                        className="text-gray-300 hover:text-red-500 transition-colors p-1.5 rounded-full hover:bg-red-50"
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                  </div>
                 </div>
                 
                 <NutritionCard data={meal.analysis} compact={true} />

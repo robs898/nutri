@@ -6,3 +6,17 @@ export const MOCK_LOADING_PHRASES = [
   "Calculating macro profile...",
   "Analyzing food composition...",
 ];
+
+// NHS / UK Government recommendations for an average adult male
+// Calories: 2500kcal
+// Protein: 55g (RNI)
+// Carbs: ~50% energy (~310g)
+// Fat: ~35% energy (~95g)
+// Fiber: 30g
+export const UK_ADULT_MALE_TARGETS = {
+  calories: 2500,
+  protein: 55,
+  carbs: 310,
+  fat: 95,
+  fiber: 30
+};

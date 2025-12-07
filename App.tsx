@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [isCloudConfigured, setIsCloudConfigured] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
 
   useEffect(() => {
     let unsubscribeAuth: () => void;
@@ -69,12 +70,29 @@ const App: React.FC = () => {
   const handleSaveMeal = async (meal: Meal) => {
     if (isCloudConfigured && currentUser) {
         saveMealToCloud(meal).catch(err => alert("Failed to save to cloud: " + err.message));
-        setMeals(prev => [meal, ...prev]);
+        setMeals(prev => {
+             // Handle upsert in state
+             const existingIndex = prev.findIndex(m => m.id === meal.id);
+             let updated;
+             if (existingIndex >= 0) {
+                 updated = [...prev];
+                 updated[existingIndex] = meal;
+             } else {
+                 updated = [meal, ...prev];
+             }
+             return updated.sort((a, b) => b.timestamp - a.timestamp);
+        });
     } else {
         const updated = saveMeal(meal);
         setMeals(updated);
     }
+    setEditingMeal(null);
     setView(ViewState.DASHBOARD);
+  };
+
+  const handleEditMeal = (meal: Meal) => {
+      setEditingMeal(meal);
+      setView(ViewState.ADD);
   };
 
   const handleDeleteMeal = async (id: string) => {
@@ -121,9 +139,18 @@ const App: React.FC = () => {
       case ViewState.DASHBOARD:
         return <DashboardView meals={meals} />;
       case ViewState.ADD:
-        return <AddMealView onSave={handleSaveMeal} onCancel={() => setView(ViewState.DASHBOARD)} />;
+        return (
+            <AddMealView 
+                onSave={handleSaveMeal} 
+                onCancel={() => {
+                    setEditingMeal(null);
+                    setView(ViewState.DASHBOARD);
+                }} 
+                initialData={editingMeal}
+            />
+        );
       case ViewState.HISTORY:
-        return <HistoryView meals={meals} onDelete={handleDeleteMeal} />;
+        return <HistoryView meals={meals} onDelete={handleDeleteMeal} onEdit={handleEditMeal} />;
       case ViewState.SETTINGS:
         return <SettingsView meals={meals} onImport={handleImportMeals} onClear={handleClearAll} currentUser={currentUser} />;
       default:
@@ -206,7 +233,10 @@ const App: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setView(ViewState.ADD)}
+              onClick={() => {
+                  setEditingMeal(null);
+                  setView(ViewState.ADD);
+              }}
               className="flex flex-col items-center -mt-8"
             >
               <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 ${

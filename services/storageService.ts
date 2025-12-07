@@ -15,7 +15,19 @@ export const getStoredMeals = (): Meal[] => {
 
 export const saveMeal = (meal: Meal): Meal[] => {
   const current = getStoredMeals();
-  const updated = [meal, ...current];
+  const existingIndex = current.findIndex(m => m.id === meal.id);
+  
+  let updated;
+  if (existingIndex >= 0) {
+    updated = [...current];
+    updated[existingIndex] = meal;
+  } else {
+    updated = [meal, ...current];
+  }
+
+  // Always keep sorted by newest first
+  updated.sort((a, b) => b.timestamp - a.timestamp);
+  
   localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(updated));
   return updated;
 };
